@@ -23,10 +23,10 @@ torch.manualSeed(1)    -- fix random seed so program runs the same every time
 -- NOTE: see below for optimState, storing optimiser settings
 local opt = {}         -- these options are used throughout
 opt.optimization = 'adagrad'
-opt.batch_size = 5
+opt.batch_size = 3
 opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
 opt.test_size = 0      -- 0 means load all data
-opt.epochs = 3         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
+opt.epochs = 2         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
 --Best Adagrad--
 -- The training error is:
@@ -151,7 +151,7 @@ model_test:add(softmax)
 ------------------------------------------------------------------------------
 
 local criterion = nn.ClassNLLCriterion()
-local criterion_test = nn.ClassNLLCriterion()
+-- local criterion_test = nn.ClassNLLCriterion()
 
 ------------------------------------------------------------------------------
 -- TRAINING
@@ -165,6 +165,49 @@ local testParameters, testGradParameters = model_test:getParameters()
 ------------------------------------------------------------------------
 
 local counter = 0
+-- local feval = function(x)
+--   if x ~= parameters then
+--     parameters:copy(x)
+--   end
+
+--   -- get start/end indices for our minibatch (in this code we'll call a minibatch a "batch")
+--   --           -------
+--   --          |  ...  |
+--   --        ^ ---------<- start index = i * batchsize + 1
+--   --  batch | |       |
+--   --   size | | batch |
+--   --        v |   i   |<- end index (inclusive) = start index + batchsize
+--   --          ---------                         = (i + 1) * batchsize + 1
+--   --          |  ...  |                 (except possibly for the last minibatch, we can't
+--   --          --------                   let that one go past the end of the data, so we take a min())
+--   local start_index = counter * opt.batch_size + 1
+--   local end_index = math.min(n_train_data, (counter + 1) * opt.batch_size + 1)
+--   if end_index == n_train_data then
+--     counter = 0
+--   else
+--     counter = counter + 1
+--   end
+
+--   local batch_inputs = train.data[{{start_index, end_index}, {}}]
+--   local batch_targets = train.labels[{{start_index, end_index}}]
+--   gradParameters:zero()
+
+--   -- In order, these lines compute:
+--   -- 1. compute outputs (log probabilities) for each data point
+--   local batch_outputs = model:forward(batch_inputs)
+--   -- 2. compute the loss of these outputs, measured against the true labels in batch_target
+--   local batch_loss = criterion:forward(batch_outputs, batch_targets)
+--   -- 3. compute the derivative of the loss wrt the outputs of the model
+--   local dloss_doutput = criterion:backward(batch_outputs, batch_targets)
+--   -- 4. use gradients to update weights, we'll understand this step more next week
+--   model:backward(batch_inputs, dloss_doutput)
+
+--   -- optim expects us to return
+--   --     loss, (gradient of loss with respect to the weights that we're optimizing)
+--   return batch_loss, gradParameters
+-- end
+
+-- -------------------
 local feval = function(x)
   if x ~= parameters then
     parameters:copy(x)
@@ -207,6 +250,8 @@ local feval = function(x)
   return batch_loss, gradParameters
 end
 
+
+-- ----------------
 local counterTest = 0
 local fevalTest = function(x)
   -- if x ~= testParameters then
@@ -241,9 +286,9 @@ local fevalTest = function(x)
   -- 2. compute the loss of these outputs, measured against the true labels in batch_target
   local batch_loss = criterion_test:forward(batch_outputs, batch_targets)
   -- 3. compute the derivative of the loss wrt the outputs of the model
-  local dloss_doutput = criterion_test:backward(batch_outputs, batch_targets)
-  -- 4. use gradients to update weights, we'll understand this step more next week
-  model_test:backward(batch_inputs, dloss_doutput)
+  -- local dloss_doutput = criterion_test:backward(batch_outputs, batch_targets)
+  -- -- 4. use gradients to update weights, we'll understand this step more next week
+  -- model_test:backward(batch_inputs, dloss_doutput)
 
   -- optim expects us to return
   --     loss, (gradient of loss with respect to the weights that we're optimizing)
@@ -274,19 +319,24 @@ for i = 1, iterations do
   -- the optim module's function. It uses optimState to hide away its bookkeeping that it needs to do
   -- between iterations.
   local _, minibatch_loss = optimMethod(feval, parameters, optimState)
+  losses[#losses + 1] = minibatch_loss[1] -- append the new loss
 
   -- Our loss function is cross-entropy, divided by the number of data points,
   -- therefore the units (units in the physics sense) of the loss is "loss per data sample".
   -- Since we evaluate the loss on a different minibatch each time, the loss will sometimes
   -- fluctuate upwards slightly (i.e. the loss estimate is noisy).
   if i % 10 == 0 then -- don't print *every* iteration, this is enough to get the gist
-    local _, minibatch_loss_test = optimMethod(fevalTest, parameters, optimState)
-    testLosses[#testLosses + 1] = minibatch_loss_test[1] -- append the new loss
-    print(string.format("minibatches processed: %6s, train loss = %6.6f, test loss = %6.6f", i, minibatch_loss[1],minibatch_loss_test[1]))
-    -- print(string.format("minibatches processed: %6s, train loss = %6.6f", i, minibatch_loss[1]))
+  --   local _, minibatch_loss_test = optimMethod(fevalTest, parameters, optimState)
+  --   testLosses[#testLosses + 1] = minibatch_loss_test[1] -- append the new loss
+  --   -- print(string.format("minibatches processed: %6s, train loss = %6.6f", i, minibatch_loss[1]))
+    local outputs = model:forward(test.data)
+    local test_loss = criterion:forward(outputs, test.labels)
+    testLosses[#testLosses + 1] = test_loss -- append the new loss
+    print(string.format("minibatches processed: %6s, train loss = %6.6f, test loss = %6.6f", i, minibatch_loss[1],test_loss))
   end
   -- TIP: use this same idea of not saving the test loss in every iteration if you want to increase speed.
-    losses[#losses + 1] = minibatch_loss[1] -- append the new loss
+
+
   -- Then you can get, 10 (for example) times fewer values than the training loss. If you do this,
   -- you just have to be careful to give the correct x-values to the plotting function, rather than
   -- Tensor{1,2,...,#losses}. HINT: look up the torch.linspace function, and note that torch.range(1, #losses)
@@ -339,7 +389,9 @@ end
 gnuplot.plot({ 'Train Data Loss',
   torch.range(1, #losses),        -- x-coordinates for data to plot, creates a tensor holding {1,2,3,...,#losses}
   torch.Tensor(losses),           -- y-coordinates (the training losses)
-  '-'},
+  '-'})
+
+gnuplot.plot(
   { 'Test Data Loss',
   torch.linspace(1, #testLosses*10, #testLosses),        -- x-coordinates for data to plot, creates a tensor holding {1,2,3,...,#losses}
   torch.Tensor(testLosses),           -- y-coordinates (the training losses)
