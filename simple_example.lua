@@ -19,13 +19,19 @@ local grad = torch.Tensor{0}
 
 -- return function's value and the gradient, at a given point x_vec
 local function feval(x_vec)
-    -- note: x_vec is a Tensor of 1-dim and size 1, so 
+    -- note: x_vec is a Tensor of 1-dim and size 1, so
     -- we get its one and only element:
     local x = x_vec[1]
 
     -- compute and return func val (scalar), and gradient (Tensor)
     f = 0.5*x^2 + x*torch.sin(x)
     grad[1] = x + torch.sin(x) + x*torch.cos(x)
+    print("This is new x value: ")
+    print(x)
+    print("This is the new cost function value: ")
+    print(f)
+    print("This is the new grad of the cost function value: ")
+    print(grad)
     return f, grad
 end
 
@@ -41,12 +47,14 @@ local iter = 0
 while true do
     -- optim has multiple functions, such as adagrad, sgd, lbfgs, and others
     -- see documentation for more details
-    optim.adagrad(feval, x, state)
+    print("iteration")
+    print(iter)
+    print(optim.adagrad(feval, x, state))
 
     -- gradient norm is SOMETIMES a good measure of how close we are to the optimum, but often not.
     -- the issue is that we'd stop at points like x=0 for x^3
-    if grad:norm() < 0.005 or iter > 50000 then 
-        break 
+    if grad:norm() < 0.005 or iter > 50000 then
+        break
     end
     iter = iter + 1
 end
