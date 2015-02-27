@@ -22,20 +22,30 @@ torch.manualSeed(1)    -- fix random seed so program runs the same every time
 -- TODO: play with these optimizer options for the second handin item, as described in the writeup
 -- NOTE: see below for optimState, storing optimiser settings
 local opt = {}         -- these options are used throughout
-opt.optimization = 'lbfgs'
-opt.batch_size = 3
-opt.train_size = 10000  -- set to 0 or 60000 to use all 60000 training data
+opt.optimization = 'adagrad'
+opt.batch_size = 5
+opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
 opt.test_size = 0      -- 0 means load all data
-opt.epochs = 15         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
+opt.epochs = 3         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
+--Best Adagrad--
+-- The training error is:
+-- 0.840625
+-- The test error is:
+-- 0.837
+-- opt.optimization = 'adagrad'
+-- opt.batch_size = 3
+-- opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
+-- opt.test_size = 0      -- 0 means load all data
+-- opt.epochs = 3         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
 --Best SGD--
 -- The training error is:
--- 0.1258
+-- 0.840625
 -- The test error is:
--- 0.0988
+-- 0.837
 -- opt.batch_size = 3
--- opt.train_size = 10000  -- set to 0 or 60000 to use all 60000 training data
+-- opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
 -- opt.test_size = 0      -- 0 means load all data
 -- opt.epochs = 15         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
@@ -130,25 +140,25 @@ local n_test_outputs = test.labels:max()    -- highest label = # of classes
 print(test.labels:max())
 print(test.labels:min())
 
--- local lin_layer_test = nn.Linear(n_test_inputs, n_test_outputs)
--- local softmax_test = nn.LogSoftMax()
--- local model_test = nn.Sequential()
--- model_test:add(lin_layer)
--- model_test:add(softmax)
+local lin_layer_test = nn.Linear(n_test_inputs, n_test_outputs)
+local softmax_test = nn.LogSoftMax()
+local model_test = nn.Sequential()
+model_test:add(lin_layer)
+model_test:add(softmax)
 
 ------------------------------------------------------------------------------
 -- LOSS FUNCTION
 ------------------------------------------------------------------------------
 
 local criterion = nn.ClassNLLCriterion()
--- local criterionTest = nn.ClassNLLCriterion()
+local criterion_test = nn.ClassNLLCriterion()
 
 ------------------------------------------------------------------------------
 -- TRAINING
 ------------------------------------------------------------------------------
 
 local parameters, gradParameters = model:getParameters()
-local testParameters, testGradParameters = model:getParameters()
+local testParameters, testGradParameters = model_test:getParameters()
 
 ------------------------------------------------------------------------
 -- Define closure with mini-batches
@@ -199,9 +209,9 @@ end
 
 local counterTest = 0
 local fevalTest = function(x)
-  if x ~= testParameters then
-    testParameters:copy(x)
-  end
+  -- if x ~= testParameters then
+  --   testParameters:copy(x)
+  -- end
 
   -- get start/end indices for our minibatch (in this code we'll call a minibatch a "batch")
   --           -------
@@ -227,13 +237,13 @@ local fevalTest = function(x)
 
   -- In order, these lines compute:
   -- 1. compute outputs (log probabilities) for each data point
-  local batch_outputs = model:forward(batch_inputs)
+  local batch_outputs = model_test:forward(batch_inputs)
   -- 2. compute the loss of these outputs, measured against the true labels in batch_target
-  local batch_loss = criterion:forward(batch_outputs, batch_targets)
+  local batch_loss = criterion_test:forward(batch_outputs, batch_targets)
   -- 3. compute the derivative of the loss wrt the outputs of the model
-  local dloss_doutput = criterion:backward(batch_outputs, batch_targets)
+  local dloss_doutput = criterion_test:backward(batch_outputs, batch_targets)
   -- 4. use gradients to update weights, we'll understand this step more next week
-  model:backward(batch_inputs, dloss_doutput)
+  model_test:backward(batch_inputs, dloss_doutput)
 
   -- optim expects us to return
   --     loss, (gradient of loss with respect to the weights that we're optimizing)
@@ -273,6 +283,7 @@ for i = 1, iterations do
     local _, minibatch_loss_test = optimMethod(fevalTest, parameters, optimState)
     testLosses[#testLosses + 1] = minibatch_loss_test[1] -- append the new loss
     print(string.format("minibatches processed: %6s, train loss = %6.6f, test loss = %6.6f", i, minibatch_loss[1],minibatch_loss_test[1]))
+    -- print(string.format("minibatches processed: %6s, train loss = %6.6f", i, minibatch_loss[1]))
   end
   -- TIP: use this same idea of not saving the test loss in every iteration if you want to increase speed.
     losses[#losses + 1] = minibatch_loss[1] -- append the new loss
